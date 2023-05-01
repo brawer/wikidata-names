@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gitlab.com/tozd/go/errors"
@@ -19,6 +20,8 @@ import (
 type Extractor struct {
 	dumpPath string
 	dumpDate time.Time
+	workdir  string
+	client   *http.Client
 }
 
 type Output struct {
@@ -49,10 +52,10 @@ func (o *Output) Close() error {
 	return nil
 }
 
-func ShouldRun(dumpDate time.Time) (bool, error) {
-	day := dumpDate.Format("200601012")
+func ShouldRun(dumpDate time.Time, workdir string) (bool, error) {
+	day := dumpDate.Format("20060102")
 	for _, n := range []string{"familynames", "givennames"} {
-		path := fmt.Sprintf("%s-%s.csv.gz", n, day)
+		path := filepath.Join(workdir, fmt.Sprintf("%s-%s.csv.gz", n, day))
 		_, err := os.Stat(path)
 		if err == nil {
 			continue
@@ -65,16 +68,18 @@ func ShouldRun(dumpDate time.Time) (bool, error) {
 	return false, nil
 }
 
-func NewExtractor(dumpPath string, dumpDate time.Time) (*Extractor, error) {
+func NewExtractor(dumpPath string, dumpDate time.Time, workdir string, client *http.Client) (*Extractor, error) {
 	return &Extractor{
 		dumpPath: dumpPath,
 		dumpDate: dumpDate,
+		workdir:  workdir,
+		client:   client,
 	}, nil
 }
 
-func NewOutput(dumpDate time.Time, filename string, wikidataClassID int64, client *http.Client) (*Output, error) {
-	day := dumpDate.Format("200601012")
-	path := fmt.Sprintf("%s-%s.csv.gz", filename, day)
+func NewOutput(dumpDate time.Time, workdir string, filename string, wikidataClassID int64, client *http.Client) (*Output, error) {
+	day := dumpDate.Format("20060102")
+	path := filepath.Join(workdir, fmt.Sprintf("%s-%s.csv.gz", filename, day))
 	file, err := os.Create(path + ".tmp")
 	if err != nil {
 		return nil, err
@@ -100,8 +105,6 @@ func NewOutput(dumpDate time.Time, filename string, wikidataClassID int64, clien
 }
 
 func (ex *Extractor) Run() error {
-	client := &http.Client{}
-
 	outputs := make([]*Output, 0)
 	for _, s := range []struct {
 		filename        string
@@ -110,7 +113,7 @@ func (ex *Extractor) Run() error {
 		{"familynames", 101352},
 		{"givennames", 202444},
 	} {
-		o, err := NewOutput(ex.dumpDate, s.filename, s.wikidataClassID, client)
+		o, err := NewOutput(ex.dumpDate, ex.workdir, s.filename, s.wikidataClassID, ex.client)
 		if err != nil {
 			return err
 		}
