@@ -1,0 +1,4 @@
+/extract
+*~
+/*.csv.gz
+/*.tmp
